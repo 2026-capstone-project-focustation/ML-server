@@ -72,7 +72,16 @@ terraform plan
 terraform apply
 ```
 
-적용이 끝나면 출력값으로 EC2 공인 IP와 앱 URL을 확인할 수 있습니다.
+적용이 끝나면 출력값으로 ECR 리포지토리 URL, EC2 공인 IP, HTTPS 앱 URL을 확인할 수 있습니다.
+
+ECR에 이미지를 올리는 예시:
+
+```bash
+aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com
+docker build -t focustation-ml-server .
+docker tag focustation-ml-server:latest 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/focustation-ml-server:latest
+docker push 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/focustation-ml-server:latest
+```
 
 ## 3. 현재 범위
 

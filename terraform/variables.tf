@@ -26,6 +26,12 @@ variable "acm_certificate_arn" {
   type        = string
 }
 
+variable "ecr_repository_name" {
+  description = "ECR repository name for the application image"
+  type        = string
+  default     = "focustation-ml-server"
+}
+
 variable "container_image_uri" {
   description = "Docker image URI to run on the EC2 instance"
   type        = string
