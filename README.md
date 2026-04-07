@@ -10,6 +10,13 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
+Docker로 실행:
+
+```bash
+docker build -t focustation-ml-server .
+docker run --rm -p 8000:8000 focustation-ml-server
+```
+
 서버가 실행되면 아래 엔드포인트를 사용할 수 있습니다.
 
 - `GET /health`
