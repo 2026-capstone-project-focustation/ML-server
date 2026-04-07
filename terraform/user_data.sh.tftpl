@@ -1,0 +1,56 @@
+#!/bin/bash
+set -euo pipefail
+
+dnf update -y
+dnf install -y docker awscli
+systemctl enable docker
+systemctl start docker
+usermod -aG docker ec2-user
+
+mkdir -p /opt/${project_name}
+
+cat <<'EOF' > /opt/${project_name}/run-container.sh
+#!/bin/bash
+set -euo pipefail
+
+AWS_REGION="${aws_region}"
+IMAGE_URI="${image_uri}"
+APP_PORT="${app_port}"
+API_KEY_VALUE="${api_key}"
+
+if [[ "$IMAGE_URI" == *.amazonaws.com/* ]]; then
+  REGISTRY_HOST="$(echo "$IMAGE_URI" | cut -d'/' -f1)"
+  aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$REGISTRY_HOST"
+fi
+
+docker pull "$IMAGE_URI"
+docker rm -f focustation-ml-server >/dev/null 2>&1 || true
+docker run -d \
+  --name focustation-ml-server \
+  --restart unless-stopped \
+  -e API_KEY="$API_KEY_VALUE" \
+  -p "$APP_PORT:$APP_PORT" \
+  "$IMAGE_URI"
+EOF
+
+chmod +x /opt/${project_name}/run-container.sh
+
+cat <<EOF > /etc/systemd/system/${project_name}.service
+[Unit]
+Description=FocusTation ML Server container
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/${project_name}/run-container.sh
+ExecStop=/usr/bin/docker stop focustation-ml-server
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable ${project_name}.service
+systemctl start ${project_name}.service

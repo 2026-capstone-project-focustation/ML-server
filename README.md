@@ -52,12 +52,15 @@ curl -X POST "http://127.0.0.1:8000/score" \
   -d "{\"feature1\":1.5,\"feature2\":2.0,\"feature3\":3.5}"
 ```
 
-## 2. Terraform으로 EC2 배포
+## 2. Terraform으로 ALB + EC2 배포
 
 `terraform/terraform.tfvars` 파일을 만들고 최소한 아래 값을 채워주세요.
 
 ```hcl
-key_pair_name = "your-existing-keypair"
+key_pair_name        = "your-existing-keypair"
+acm_certificate_arn = "arn:aws:acm:ap-northeast-2:123456789012:certificate/xxxx"
+container_image_uri = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/focustation-ml-server:latest"
+api_key             = "your-secret-api-key"
 ```
 
 배포 명령:
@@ -74,5 +77,6 @@ terraform apply
 ## 3. 현재 범위
 
 - CI/CD는 아직 포함하지 않았습니다.
-- EC2 부팅 시 `user_data`로 FastAPI 앱을 바로 띄우는 기본 구조입니다.
-- 이후에는 `Nginx`, `HTTPS`, `GitHub Actions`를 추가해 운영 형태로 확장하면 좋습니다.
+- 현재 Terraform은 `ALB(HTTPS) -> EC2 -> Docker 컨테이너` 구조를 기준으로 합니다.
+- ACM 인증서는 미리 발급되어 있다고 가정합니다.
+- API key는 Terraform 변수로 전달되며, 이후에는 SSM 또는 Secrets Manager로 옮기는 것이 더 좋습니다.
