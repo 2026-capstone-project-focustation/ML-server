@@ -7,6 +7,7 @@
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
+set API_KEY=your-secret-api-key
 uvicorn app.main:app --reload
 ```
 
@@ -14,13 +15,15 @@ Docker로 실행:
 
 ```bash
 docker build -t focustation-ml-server .
-docker run --rm -p 8000:8000 focustation-ml-server
+docker run --rm -e API_KEY=your-secret-api-key -p 8000:8000 focustation-ml-server
 ```
 
 서버가 실행되면 아래 엔드포인트를 사용할 수 있습니다.
 
 - `GET /health`
 - `POST /score`
+
+`POST /score` 호출 시 `X-API-Key` 헤더가 필요합니다.
 
 예시 요청:
 
@@ -38,6 +41,15 @@ docker run --rm -p 8000:8000 focustation-ml-server
 {
   "score": 7.0
 }
+```
+
+예시 `curl`:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/score" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-secret-api-key" \
+  -d "{\"feature1\":1.5,\"feature2\":2.0,\"feature3\":3.5}"
 ```
 
 ## 2. Terraform으로 EC2 배포
