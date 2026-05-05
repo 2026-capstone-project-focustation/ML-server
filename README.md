@@ -89,3 +89,7 @@ docker push 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/focustation-ml-ser
 - 현재 Terraform은 `ALB(HTTPS) -> EC2 -> Docker 컨테이너` 구조를 기준으로 합니다.
 - ACM 인증서는 미리 발급되어 있다고 가정합니다.
 - API key는 Terraform 변수로 전달되며, 이후에는 SSM 또는 Secrets Manager로 옮기는 것이 더 좋습니다.
+
+## 4. Linear Regression 추론
+
+Linear Regression 모델 export와 추론 실행 방법은 [LINEAR_REGRESSION_INFERENCE.md](./model/LINEAR_REGRESSION_INFERENCE.md)를 참고하세요.
