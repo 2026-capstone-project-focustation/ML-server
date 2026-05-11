@@ -13,6 +13,7 @@ provider "aws" {
   region = var.aws_region
 }
 
+# 기본 VPC와 서브넷을 사용해 초기 인프라 구성을 단순하게 유지한다.
 data "aws_vpc" "default" {
   default = true
 }
@@ -24,6 +25,7 @@ data "aws_subnets" "default" {
   }
 }
 
+# EC2에는 Amazon Linux 2023 최신 AMI를 사용한다.
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["137112412989"]
@@ -34,6 +36,7 @@ data "aws_ami" "amazon_linux" {
   }
 }
 
+# 애플리케이션 Docker 이미지를 저장할 ECR 저장소.
 resource "aws_ecr_repository" "app" {
   name                 = var.ecr_repository_name
   image_tag_mutability = "MUTABLE"
@@ -47,6 +50,7 @@ resource "aws_ecr_repository" "app" {
   }
 }
 
+# 오래된 이미지를 정리해 ECR 저장 비용이 불필요하게 커지는 것을 막는다.
 resource "aws_ecr_lifecycle_policy" "app" {
   repository = aws_ecr_repository.app.name
 
@@ -81,12 +85,15 @@ resource "aws_ecr_lifecycle_policy" "app" {
   })
 }
 
-resource "aws_security_group" "alb" {
-  name        = "${var.project_name}-alb-sg"
-  description = "Allow public HTTP and HTTPS traffic to the ALB"
+# 단일 EC2 인스턴스 앞단에서 HTTP/HTTPS와 SSH 접근만 허용한다.
+# FastAPI 포트는 외부에 직접 열지 않고 Nginx가 로컬로 프록시한다.
+resource "aws_security_group" "app" {
+  name        = "${var.project_name}-sg"
+  description = "Allow public web traffic and restricted SSH access"
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
+    description = "HTTP"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -94,37 +101,15 @@ resource "aws_security_group" "alb" {
   }
 
   ingress {
+    description = "HTTPS"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = var.allowed_https_cidrs
   }
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.project_name}-alb-sg"
-  }
-}
-
-resource "aws_security_group" "app" {
-  name        = "${var.project_name}-app-sg"
-  description = "Allow ALB traffic to the app and optional SSH access"
-  vpc_id      = data.aws_vpc.default.id
-
   ingress {
-    from_port       = var.app_port
-    to_port         = var.app_port
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
-  ingress {
+    description = "SSH"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -132,6 +117,7 @@ resource "aws_security_group" "app" {
   }
 
   egress {
+    description = "All outbound"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -139,74 +125,11 @@ resource "aws_security_group" "app" {
   }
 
   tags = {
-    Name = "${var.project_name}-app-sg"
+    Name = "${var.project_name}-sg"
   }
 }
 
-resource "aws_lb" "app" {
-  name               = substr("${var.project_name}-alb", 0, 32)
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = data.aws_subnets.default.ids
-
-  tags = {
-    Name = "${var.project_name}-alb"
-  }
-}
-
-resource "aws_lb_target_group" "app" {
-  name        = substr("${var.project_name}-tg", 0, 32)
-  port        = var.app_port
-  protocol    = "HTTP"
-  target_type = "instance"
-  vpc_id      = data.aws_vpc.default.id
-
-  health_check {
-    enabled             = true
-    path                = var.health_check_path
-    protocol            = "HTTP"
-    matcher             = "200"
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
-    interval            = 30
-  }
-
-  tags = {
-    Name = "${var.project_name}-tg"
-  }
-}
-
-resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.app.arn
-  port              = 80
-  protocol          = "HTTP"
-
-  default_action {
-    type = "redirect"
-
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
-    }
-  }
-}
-
-resource "aws_lb_listener" "https" {
-  load_balancer_arn = aws_lb.app.arn
-  port              = 443
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = var.acm_certificate_arn
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
-  }
-}
-
+# EC2가 ECR에서 이미지를 pull 할 수 있도록 IAM Role을 부여한다.
 resource "aws_iam_role" "ec2" {
   name = "${var.project_name}-ec2-role"
 
@@ -234,6 +157,8 @@ resource "aws_iam_instance_profile" "ec2" {
   role = aws_iam_role.ec2.name
 }
 
+# 실제 ML 서버가 실행되는 단일 EC2 인스턴스.
+# user_data에서 Docker, Nginx, 앱 컨테이너, 선택적 TLS를 구성한다.
 resource "aws_instance" "app" {
   ami                         = data.aws_ami.amazon_linux.id
   instance_type               = var.instance_type
@@ -244,20 +169,43 @@ resource "aws_instance" "app" {
   associate_public_ip_address = true
 
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
-    aws_region   = var.aws_region
-    image_uri    = var.container_image_uri
-    app_port     = var.app_port
-    api_key      = var.api_key
-    project_name = var.project_name
+    aws_region         = var.aws_region
+    image_uri          = var.container_image_uri
+    app_port           = var.app_port
+    api_key_b64        = base64encode(var.api_key)
+    project_name       = var.project_name
+    domain_name        = var.domain_name
+    certbot_email      = var.certbot_email
+    nginx_rate_limit   = var.nginx_rate_limit
+    nginx_rate_burst   = var.nginx_rate_burst
+    enable_certbot_tls = var.enable_certbot_tls
+    health_check_path  = var.health_check_path
   })
+
+  # gp3 암호화 루트 볼륨을 사용해 기본 디스크 성능과 보안을 확보한다.
+  root_block_device {
+    volume_size           = var.root_volume_size_gb
+    volume_type           = "gp3"
+    encrypted             = true
+    delete_on_termination = true
+  }
 
   tags = {
     Name = var.project_name
   }
 }
 
-resource "aws_lb_target_group_attachment" "app" {
-  target_group_arn = aws_lb_target_group.app.arn
-  target_id        = aws_instance.app.id
-  port             = var.app_port
+# DNS 설정과 재배포를 쉽게 하기 위해 고정 public IP를 붙인다.
+resource "aws_eip" "app" {
+  domain = "vpc"
+
+  tags = {
+    Name = "${var.project_name}-eip"
+  }
+}
+
+# 생성한 Elastic IP를 앱 EC2 인스턴스에 연결한다.
+resource "aws_eip_association" "app" {
+  instance_id   = aws_instance.app.id
+  allocation_id = aws_eip.app.id
 }
