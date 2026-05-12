@@ -1,0 +1,158 @@
+#!/bin/bash
+set -euo pipefail
+
+PROJECT_NAME="${project_name}"
+AWS_REGION="${aws_region}"
+IMAGE_URI="${image_uri}"
+APP_PORT="${app_port}"
+API_KEY_B64="${api_key_b64}"
+DOMAIN_NAME="${domain_name}"
+CERTBOT_EMAIL="${certbot_email}"
+ENABLE_CERTBOT_TLS="${enable_certbot_tls}"
+HEALTH_CHECK_PATH="${health_check_path}"
+
+# EC2 부팅 직후 필요한 런타임 패키지를 설치한다.
+dnf update -y
+dnf install -y docker nginx awscli curl
+
+# 도메인과 이메일이 준비된 경우에만 Let's Encrypt 도구를 설치한다.
+if [[ "$ENABLE_CERTBOT_TLS" == "true" ]]; then
+  dnf install -y certbot python3-certbot-nginx
+fi
+
+# Docker 서비스를 켜고, ec2-user가 수동 배포 시 docker 명령을 쓸 수 있게 한다.
+systemctl enable docker
+systemctl start docker
+usermod -aG docker ec2-user
+
+# API Key는 특수문자 때문에 스크립트가 깨지지 않도록 base64로 받은 뒤 env 파일로 복원한다.
+mkdir -p "/opt/$PROJECT_NAME"
+printf 'API_KEY=%s\n' "$(printf '%s' "$API_KEY_B64" | base64 -d)" > "/opt/$PROJECT_NAME/app.env"
+chmod 600 "/opt/$PROJECT_NAME/app.env"
+
+# 새 이미지를 pull 하고 기존 컨테이너를 교체하는 재사용 가능한 실행 스크립트.
+cat > "/opt/$PROJECT_NAME/run-container.sh" <<EOF
+#!/bin/bash
+set -euo pipefail
+
+PROJECT_NAME="$PROJECT_NAME"
+CONTAINER_NAME="$PROJECT_NAME"
+AWS_REGION="$AWS_REGION"
+APP_PORT="$APP_PORT"
+CONTAINER_PORT="8000"
+IMAGE_URI="\$${1:-}"
+IMAGE_FILE="/opt/$PROJECT_NAME/current-image.txt"
+
+if [[ -z "\$IMAGE_URI" && -f "\$IMAGE_FILE" ]]; then
+  IMAGE_URI="\$(cat "\$IMAGE_FILE")"
+fi
+
+if [[ -z "\$IMAGE_URI" ]]; then
+  echo "Docker image URI is required. Pass it as the first argument or write it to \$IMAGE_FILE." >&2
+  exit 1
+fi
+
+printf '%s\n' "\$IMAGE_URI" > "\$IMAGE_FILE"
+
+# ECR 이미지인 경우 EC2 IAM Role 권한으로 registry에 로그인한다.
+if [[ "\$IMAGE_URI" == *.amazonaws.com/* ]]; then
+  REGISTRY_HOST="\$(echo "\$IMAGE_URI" | cut -d'/' -f1)"
+  aws ecr get-login-password --region "\$AWS_REGION" | docker login --username AWS --password-stdin "\$REGISTRY_HOST"
+fi
+
+# 앱 포트는 127.0.0.1에만 바인딩해서 외부에서는 Nginx를 통해서만 접근하게 한다.
+docker pull "\$IMAGE_URI"
+docker rm -f "\$CONTAINER_NAME" >/dev/null 2>&1 || true
+docker run -d \
+  --name "\$CONTAINER_NAME" \
+  --restart unless-stopped \
+  --env-file "/opt/$PROJECT_NAME/app.env" \
+  -p "127.0.0.1:\$APP_PORT:\$CONTAINER_PORT" \
+  "\$IMAGE_URI"
+EOF
+
+chmod +x "/opt/$PROJECT_NAME/run-container.sh"
+
+# systemd 서비스로 등록해 인스턴스 재부팅 후에도 앱 컨테이너가 다시 올라오게 한다.
+cat > "/etc/systemd/system/$PROJECT_NAME.service" <<EOF
+[Unit]
+Description=FocusTation ML Server container
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/$PROJECT_NAME/run-container.sh
+ExecStop=/usr/bin/docker stop $PROJECT_NAME
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+SERVER_NAME="_"
+if [[ -n "$DOMAIN_NAME" ]]; then
+  SERVER_NAME="$DOMAIN_NAME"
+fi
+
+# Nginx가 외부 HTTP 요청을 받고 로컬 FastAPI 컨테이너로 전달한다.
+# limit_req로 앱에 들어오기 전 간단한 rate limiting을 적용한다.
+cat > /etc/nginx/conf.d/focustation-ml-server.conf <<EOF
+limit_req_zone \$binary_remote_addr zone=focustation_api:10m rate=${nginx_rate_limit};
+
+server {
+    listen 80;
+    server_name $SERVER_NAME;
+
+    client_max_body_size 1m;
+
+    location / {
+        limit_req zone=focustation_api burst=${nginx_rate_burst} nodelay;
+
+        proxy_pass http://127.0.0.1:$APP_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF
+
+nginx -t
+systemctl enable nginx
+
+systemctl daemon-reload
+systemctl restart nginx
+
+# Terraform 변수로 이미지 URI를 넘긴 경우에만 부팅 시 바로 앱 컨테이너를 실행한다.
+if [[ -n "$IMAGE_URI" ]]; then
+  printf '%s\n' "$IMAGE_URI" > "/opt/$PROJECT_NAME/current-image.txt"
+  systemctl enable "$PROJECT_NAME.service"
+  systemctl start "$PROJECT_NAME.service"
+
+  # 컨테이너 기동 직후 health check가 잠시 실패할 수 있어 짧게 재시도한다.
+  health_check_ok=0
+  for i in {1..30}; do
+    if curl -fsS "http://127.0.0.1:$APP_PORT$HEALTH_CHECK_PATH" >/dev/null; then
+      health_check_ok=1
+      break
+    fi
+    sleep 2
+  done
+
+  if [[ "$health_check_ok" -ne 1 ]]; then
+    echo "Health check failed after container startup." >&2
+    exit 1
+  fi
+fi
+
+# 도메인 DNS가 이 EC2 public IP를 바라보는 상태에서만 인증서 발급이 성공한다.
+if [[ "$ENABLE_CERTBOT_TLS" == "true" && -n "$DOMAIN_NAME" && -n "$CERTBOT_EMAIL" ]]; then
+  certbot --nginx \
+    --non-interactive \
+    --agree-tos \
+    --redirect \
+    --email "$CERTBOT_EMAIL" \
+    -d "$DOMAIN_NAME"
+fi

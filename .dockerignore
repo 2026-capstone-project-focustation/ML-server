@@ -1,0 +1,10 @@
+.git
+.gitignore
+.gitattributes
+.venv
+.venv-1
+__pycache__
+*.pyc
+.terraform
+terraform
+README.md

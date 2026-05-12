@@ -1,0 +1,18 @@
+# 배포 전 반드시 실제 AWS 계정이 맞는지 확인한다.
+# aws sts get-caller-identity
+
+key_pair_name = "your-existing-ec2-key-pair"
+
+# 이번 브랜치에서는 EC2 준비 후 scripts/deploy.ps1로 이미지를 수동 배포한다.
+# 따라서 container_image_uri는 비워두거나 생략해도 된다.
+container_image_uri = ""
+
+api_key = "your-api-key-for-score-endpoint"
+
+# 운영 전에는 본인 IP/32로 좁히는 것을 권장한다.
+allowed_ssh_cidrs = ["0.0.0.0/0"]
+
+# 이번 브랜치에서는 HTTPS를 다루지 않는다.
+enable_certbot_tls = false
+domain_name        = ""
+certbot_email      = ""
