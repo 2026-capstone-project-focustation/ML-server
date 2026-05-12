@@ -3,11 +3,20 @@
 
 ## 1. FastAPI 서버 실행
 
-```bash
+```powershell
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-set API_KEY=your-secret-api-key
+$env:API_KEY="your-secret-api-key"
+uvicorn app.main:app --reload
+```
+
+Linux/macOS 예시:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+export API_KEY=your-secret-api-key
 uvicorn app.main:app --reload
 ```
 

@@ -12,6 +12,14 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+if ($ProjectName -notmatch '^[A-Za-z0-9._-]+$') {
+    throw "ProjectName may only contain letters, numbers, dots, underscores, and hyphens."
+}
+
+if ($HealthCheckPath -notmatch '^/[A-Za-z0-9._~!$&''()*+,;=:@/%-]*$') {
+    throw "HealthCheckPath must be an absolute URL path."
+}
+
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $TerraformPath = Resolve-Path (Join-Path $RepoRoot $TerraformDir)
 
@@ -23,6 +31,10 @@ $EcrRepositoryUrl = terraform -chdir="$TerraformPath" output -raw ecr_repository
 $Ec2PublicIp = terraform -chdir="$TerraformPath" output -raw ec2_public_ip
 $RegistryHost = $EcrRepositoryUrl.Split("/")[0]
 $ImageUri = "${EcrRepositoryUrl}:${ImageTag}"
+
+if ($ImageUri -notmatch '^[A-Za-z0-9._/-]+:[A-Za-z0-9._-]+$') {
+    throw "Resolved ImageUri contains unsupported characters: $ImageUri"
+}
 
 Write-Host "Logging in to ECR: $RegistryHost"
 aws ecr get-login-password --region $AwsRegion | docker login --username AWS --password-stdin $RegistryHost
@@ -41,7 +53,7 @@ if ($SshKeyPath -ne "") {
 }
 
 $SshArgs += "${RemoteUser}@${Ec2PublicIp}"
-$RemoteCommand = "sudo /opt/$ProjectName/run-container.sh '$ImageUri' && sudo systemctl enable $ProjectName.service && curl -fsS http://127.0.0.1:$AppPort$HealthCheckPath"
+$RemoteCommand = "sudo /opt/$ProjectName/run-container.sh '$ImageUri' && sudo systemctl enable ${ProjectName}.service && curl -fsS http://127.0.0.1:$AppPort$HealthCheckPath"
 
 ssh @SshArgs $RemoteCommand
 

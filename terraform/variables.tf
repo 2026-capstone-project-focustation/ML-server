@@ -122,7 +122,11 @@ variable "nginx_rate_burst" {
 variable "allowed_ssh_cidrs" {
   description = "CIDR blocks allowed to access SSH on the EC2 instance"
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+
+  validation {
+    condition     = length(var.allowed_ssh_cidrs) > 0 && alltrue([for cidr in var.allowed_ssh_cidrs : cidr != "0.0.0.0/0"])
+    error_message = "allowed_ssh_cidrs must include at least one trusted CIDR and must not contain 0.0.0.0/0."
+  }
 }
 
 # HTTP 접근 허용 대역. certbot 인증서 발급을 위해 80 포트가 필요하다.

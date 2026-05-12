@@ -25,7 +25,7 @@ output "http_url" {
 # certbot TLS를 활성화한 경우 앱이 최종적으로 노출될 HTTPS 주소.
 output "https_url" {
   description = "HTTPS endpoint exposed by Nginx when TLS is enabled"
-  value       = var.domain_name != "" ? "https://${var.domain_name}" : null
+  value       = var.enable_certbot_tls && var.domain_name != "" ? "https://${var.domain_name}" : null
 }
 
 # Docker 이미지 push 대상 ECR 저장소 정보.

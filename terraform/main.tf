@@ -221,6 +221,12 @@ resource "aws_instance" "app" {
     enable_certbot_tls = var.enable_certbot_tls
     health_check_path  = var.health_check_path
   })
+  user_data_replace_on_change = true
+
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required"
+  }
 
   # gp3 암호화 루트 볼륨을 사용해 기본 디스크 성능과 보안을 확보한다.
   root_block_device {

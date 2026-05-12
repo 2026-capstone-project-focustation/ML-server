@@ -13,7 +13,7 @@ HEALTH_CHECK_PATH="${health_check_path}"
 
 # EC2 부팅 직후 필요한 런타임 패키지를 설치한다.
 dnf update -y
-dnf install -y docker nginx awscli
+dnf install -y docker nginx awscli curl
 
 # 도메인과 이메일이 준비된 경우에만 Let's Encrypt 도구를 설치한다.
 if [[ "$ENABLE_CERTBOT_TLS" == "true" ]]; then
@@ -35,9 +35,12 @@ cat > "/opt/$PROJECT_NAME/run-container.sh" <<EOF
 #!/bin/bash
 set -euo pipefail
 
+PROJECT_NAME="$PROJECT_NAME"
+CONTAINER_NAME="$PROJECT_NAME"
 AWS_REGION="$AWS_REGION"
 APP_PORT="$APP_PORT"
-IMAGE_URI="$${1:-}"
+CONTAINER_PORT="8000"
+IMAGE_URI="\$${1:-}"
 IMAGE_FILE="/opt/$PROJECT_NAME/current-image.txt"
 
 if [[ -z "\$IMAGE_URI" && -f "\$IMAGE_FILE" ]]; then
@@ -59,12 +62,12 @@ fi
 
 # 앱 포트는 127.0.0.1에만 바인딩해서 외부에서는 Nginx를 통해서만 접근하게 한다.
 docker pull "\$IMAGE_URI"
-docker rm -f focustation-ml-server >/dev/null 2>&1 || true
+docker rm -f "\$CONTAINER_NAME" >/dev/null 2>&1 || true
 docker run -d \
-  --name focustation-ml-server \
+  --name "\$CONTAINER_NAME" \
   --restart unless-stopped \
   --env-file "/opt/$PROJECT_NAME/app.env" \
-  -p "127.0.0.1:\$APP_PORT:\$APP_PORT" \
+  -p "127.0.0.1:\$APP_PORT:\$CONTAINER_PORT" \
   "\$IMAGE_URI"
 EOF
 
@@ -81,7 +84,7 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/opt/$PROJECT_NAME/run-container.sh
-ExecStop=/usr/bin/docker stop focustation-ml-server
+ExecStop=/usr/bin/docker stop $PROJECT_NAME
 
 [Install]
 WantedBy=multi-user.target
@@ -129,12 +132,19 @@ if [[ -n "$IMAGE_URI" ]]; then
   systemctl start "$PROJECT_NAME.service"
 
   # 컨테이너 기동 직후 health check가 잠시 실패할 수 있어 짧게 재시도한다.
+  health_check_ok=0
   for i in {1..30}; do
     if curl -fsS "http://127.0.0.1:$APP_PORT$HEALTH_CHECK_PATH" >/dev/null; then
+      health_check_ok=1
       break
     fi
     sleep 2
   done
+
+  if [[ "$health_check_ok" -ne 1 ]]; then
+    echo "Health check failed after container startup." >&2
+    exit 1
+  fi
 fi
 
 # 도메인 DNS가 이 EC2 public IP를 바라보는 상태에서만 인증서 발급이 성공한다.
