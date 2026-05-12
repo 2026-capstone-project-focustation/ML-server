@@ -13,16 +13,9 @@ provider "aws" {
   region = var.aws_region
 }
 
-# 기본 VPC와 서브넷을 사용해 초기 인프라 구성을 단순하게 유지한다.
-data "aws_vpc" "default" {
-  default = true
-}
-
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
+# 계정에 기본 VPC가 없을 수 있으므로 앱 전용 최소 네트워크를 함께 구성한다.
+data "aws_availability_zones" "available" {
+  state = "available"
 }
 
 # EC2에는 Amazon Linux 2023 최신 AMI를 사용한다.
@@ -34,6 +27,53 @@ data "aws_ami" "amazon_linux" {
     name   = "name"
     values = ["al2023-ami-2023.*-x86_64"]
   }
+}
+
+resource "aws_vpc" "app" {
+  cidr_block           = var.vpc_cidr_block
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
+  tags = {
+    Name = "${var.project_name}-vpc"
+  }
+}
+
+resource "aws_internet_gateway" "app" {
+  vpc_id = aws_vpc.app.id
+
+  tags = {
+    Name = "${var.project_name}-igw"
+  }
+}
+
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.app.id
+  cidr_block              = var.public_subnet_cidr_block
+  availability_zone       = data.aws_availability_zones.available.names[0]
+  map_public_ip_on_launch = false
+
+  tags = {
+    Name = "${var.project_name}-public-subnet"
+  }
+}
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.app.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.app.id
+  }
+
+  tags = {
+    Name = "${var.project_name}-public-rt"
+  }
+}
+
+resource "aws_route_table_association" "public" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
 }
 
 # 애플리케이션 Docker 이미지를 저장할 ECR 저장소.
@@ -90,7 +130,7 @@ resource "aws_ecr_lifecycle_policy" "app" {
 resource "aws_security_group" "app" {
   name        = "${var.project_name}-sg"
   description = "Allow public web traffic and restricted SSH access"
-  vpc_id      = data.aws_vpc.default.id
+  vpc_id      = aws_vpc.app.id
 
   ingress {
     description = "HTTP"
@@ -163,10 +203,10 @@ resource "aws_instance" "app" {
   ami                         = data.aws_ami.amazon_linux.id
   instance_type               = var.instance_type
   key_name                    = var.key_pair_name
-  subnet_id                   = data.aws_subnets.default.ids[0]
+  subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.app.id]
   iam_instance_profile        = aws_iam_instance_profile.ec2.name
-  associate_public_ip_address = true
+  associate_public_ip_address = false
 
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
     aws_region         = var.aws_region

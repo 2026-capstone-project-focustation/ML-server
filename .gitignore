@@ -6,4 +6,8 @@ __pycache__/
 .venv-1/
 terraform.tfvars
 terraform/*.tfvars
+terraform.tfstate
+terraform.tfstate.*
+terraform/*.tfstate
+terraform/*.tfstate.*
 local-docs/

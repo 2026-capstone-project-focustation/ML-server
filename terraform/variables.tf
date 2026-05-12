@@ -12,6 +12,20 @@ variable "aws_region" {
   default     = "ap-northeast-2"
 }
 
+# 계정 기본 VPC에 의존하지 않도록 앱 전용 VPC를 생성한다.
+variable "vpc_cidr_block" {
+  description = "CIDR block for the application VPC"
+  type        = string
+  default     = "10.42.0.0/16"
+}
+
+# 단일 EC2를 올릴 퍼블릭 서브넷 대역.
+variable "public_subnet_cidr_block" {
+  description = "CIDR block for the public subnet"
+  type        = string
+  default     = "10.42.1.0/24"
+}
+
 # 초기 비용을 낮게 유지하기 위한 작은 인스턴스 타입.
 variable "instance_type" {
   description = "EC2 instance type"
@@ -40,9 +54,11 @@ variable "ecr_repository_name" {
 }
 
 # EC2가 부팅 시 pull 해서 실행할 Docker 이미지 URI.
+# 이번 브랜치에서는 수동 배포를 기본으로 하므로 비워두면 EC2 준비만 수행한다.
 variable "container_image_uri" {
   description = "Docker image URI to run on the EC2 instance"
   type        = string
+  default     = ""
 }
 
 # FastAPI /score 요청에서 검증할 API Key.

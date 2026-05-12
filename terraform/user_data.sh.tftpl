@@ -36,8 +36,20 @@ cat > "/opt/$PROJECT_NAME/run-container.sh" <<EOF
 set -euo pipefail
 
 AWS_REGION="$AWS_REGION"
-IMAGE_URI="$IMAGE_URI"
 APP_PORT="$APP_PORT"
+IMAGE_URI="$${1:-}"
+IMAGE_FILE="/opt/$PROJECT_NAME/current-image.txt"
+
+if [[ -z "\$IMAGE_URI" && -f "\$IMAGE_FILE" ]]; then
+  IMAGE_URI="\$(cat "\$IMAGE_FILE")"
+fi
+
+if [[ -z "\$IMAGE_URI" ]]; then
+  echo "Docker image URI is required. Pass it as the first argument or write it to \$IMAGE_FILE." >&2
+  exit 1
+fi
+
+printf '%s\n' "\$IMAGE_URI" > "\$IMAGE_FILE"
 
 # ECR 이미지인 경우 EC2 IAM Role 권한으로 registry에 로그인한다.
 if [[ "\$IMAGE_URI" == *.amazonaws.com/* ]]; then
@@ -108,17 +120,22 @@ nginx -t
 systemctl enable nginx
 
 systemctl daemon-reload
-systemctl enable "$PROJECT_NAME.service"
-systemctl start "$PROJECT_NAME.service"
 systemctl restart nginx
 
-# 컨테이너 기동 직후 health check가 잠시 실패할 수 있어 짧게 재시도한다.
-for i in {1..30}; do
-  if curl -fsS "http://127.0.0.1:$APP_PORT$HEALTH_CHECK_PATH" >/dev/null; then
-    break
-  fi
-  sleep 2
-done
+# Terraform 변수로 이미지 URI를 넘긴 경우에만 부팅 시 바로 앱 컨테이너를 실행한다.
+if [[ -n "$IMAGE_URI" ]]; then
+  printf '%s\n' "$IMAGE_URI" > "/opt/$PROJECT_NAME/current-image.txt"
+  systemctl enable "$PROJECT_NAME.service"
+  systemctl start "$PROJECT_NAME.service"
+
+  # 컨테이너 기동 직후 health check가 잠시 실패할 수 있어 짧게 재시도한다.
+  for i in {1..30}; do
+    if curl -fsS "http://127.0.0.1:$APP_PORT$HEALTH_CHECK_PATH" >/dev/null; then
+      break
+    fi
+    sleep 2
+  done
+fi
 
 # 도메인 DNS가 이 EC2 public IP를 바라보는 상태에서만 인증서 발급이 성공한다.
 if [[ "$ENABLE_CERTBOT_TLS" == "true" && -n "$DOMAIN_NAME" && -n "$CERTBOT_EMAIL" ]]; then
