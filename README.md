@@ -34,23 +34,16 @@ docker run --rm -e API_KEY=your-secret-api-key -p 8000:8000 focustation-ml-serve
 
 `POST /score` 호출 시 `X-API-Key` 헤더가 필요합니다.
 
-예시 요청:
-
-```json
-{
-  "feature1": 1.5,
-  "feature2": 2.0,
-  "feature3": 3.5
-}
-```
-
 예시 응답:
 
 ```json
 {
-  "score": 7.0
+  "score": 83.42
 }
 ```
+
+`/score` 요청 body는 실제 Linear Regression 모델의 feature column 전체를 포함해야 합니다.
+샘플 payload와 입력 컬럼 목록은 [LINEAR_REGRESSION_INFERENCE.md](./model/LINEAR_REGRESSION_INFERENCE.md)를 참고하세요.
 
 예시 `curl`:
 
@@ -58,7 +51,7 @@ docker run --rm -e API_KEY=your-secret-api-key -p 8000:8000 focustation-ml-serve
 curl -X POST "http://127.0.0.1:8000/score" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your-secret-api-key" \
-  -d "{\"feature1\":1.5,\"feature2\":2.0,\"feature3\":3.5}"
+  -d @sample_input.json
 ```
 
 ## 2. Terraform으로 EC2 준비
