@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,33 @@ MODEL_PATH = (
 PREDICTION_COL = "predicted_satisfaction_score"
 
 
+def _validate_model(model: Any) -> Any:
+    predict = getattr(model, "predict", None)
+    if not callable(predict):
+        raise ValueError("Model bundle validation failed: `model.predict` must be callable.")
+    return model
+
+
+def _validate_feature_columns(feature_columns: Any) -> list[str]:
+    if isinstance(feature_columns, (str, bytes)) or not isinstance(feature_columns, Iterable):
+        raise ValueError(
+            "Model bundle validation failed: `feature_columns` must be a non-empty iterable of strings."
+        )
+
+    columns = list(feature_columns)
+    if not columns:
+        raise ValueError(
+            "Model bundle validation failed: `feature_columns` must not be empty."
+        )
+
+    if not all(isinstance(column, str) for column in columns):
+        raise ValueError(
+            "Model bundle validation failed: every `feature_columns` item must be a string."
+        )
+
+    return columns
+
+
 @lru_cache(maxsize=1)
 def load_model_bundle() -> dict[str, Any]:
     if not MODEL_PATH.exists():
@@ -27,8 +55,16 @@ def load_model_bundle() -> dict[str, Any]:
         )
 
     loaded = joblib.load(MODEL_PATH)
-    if isinstance(loaded, dict) and "model" in loaded and "feature_columns" in loaded:
-        return loaded
+    if isinstance(loaded, dict):
+        if "model" not in loaded:
+            raise ValueError("Model bundle validation failed: missing `model` key.")
+        if "feature_columns" not in loaded:
+            raise ValueError("Model bundle validation failed: missing `feature_columns` key.")
+
+        return {
+            "model": _validate_model(loaded["model"]),
+            "feature_columns": _validate_feature_columns(loaded["feature_columns"]),
+        }
 
     feature_columns = getattr(loaded, "feature_columns", None)
     if feature_columns is None:
@@ -37,7 +73,10 @@ def load_model_bundle() -> dict[str, Any]:
             "Re-export the model bundle."
         )
 
-    return {"model": loaded, "feature_columns": feature_columns}
+    return {
+        "model": _validate_model(loaded),
+        "feature_columns": _validate_feature_columns(feature_columns),
+    }
 
 
 def predict_satisfaction(record: dict[str, Any], clip: bool = True) -> float:
