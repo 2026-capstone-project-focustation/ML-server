@@ -32,36 +32,50 @@ docker run --rm -e API_KEY=your-secret-api-key -p 8000:8000 focustation-ml-serve
 - `GET /health`
 - `POST /score`
 
+## 2. `/score` API 호출
+
 `POST /score` 호출 시 `X-API-Key` 헤더가 필요합니다.
+요청 body는 실제 Linear Regression 모델의 feature column 전체를 포함해야 합니다.
+샘플 payload와 입력 컬럼 목록은 [LINEAR_REGRESSION_INFERENCE.md](./model/LINEAR_REGRESSION_INFERENCE.md)를 참고하세요.
 
-예시 요청:
+로컬 서버 테스트:
 
-```json
-{
-  "feature1": 1.5,
-  "feature2": 2.0,
-  "feature3": 3.5
-}
+```powershell
+$env:API_KEY="your-secret-api-key"
+uvicorn app.main:app --reload
+```
+
+```powershell
+curl.exe -X POST "http://127.0.0.1:8000/score" `
+  -H "Content-Type: application/json" `
+  -H "X-API-Key: your-secret-api-key" `
+  --data-binary "@sample_input.json"
+```
+
+EC2 배포 서버 테스트:
+
+```powershell
+curl.exe http://3.34.100.247/health
+```
+
+```powershell
+curl.exe -X POST "http://3.34.100.247/score" `
+  -H "Content-Type: application/json" `
+  -H "X-API-Key: <api-key>" `
+  --data-binary "@sample_input.json"
 ```
 
 예시 응답:
 
 ```json
 {
-  "score": 7.0
+  "score": 68.73164866961636
 }
 ```
 
-예시 `curl`:
+API key 없이 호출하면 인증 실패가 발생해야 정상입니다.
 
-```bash
-curl -X POST "http://127.0.0.1:8000/score" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: your-secret-api-key" \
-  -d "{\"feature1\":1.5,\"feature2\":2.0,\"feature3\":3.5}"
-```
-
-## 2. Terraform으로 EC2 준비
+## 3. Terraform으로 EC2 준비
 
 `terraform/terraform.tfvars` 파일을 만들고 최소한 아래 값을 채워주세요.
 
@@ -71,8 +85,8 @@ api_key           = "your-secret-api-key"
 allowed_ssh_cidrs = ["your-ip/32"]
 ```
 
-이번 브랜치에서는 먼저 EC2와 ECR을 준비하고, 앱 이미지는 수동 스크립트로 올립니다.
-따라서 `container_image_uri`는 비워두거나 생략해도 됩니다.
+현재 구조에서는 먼저 EC2와 ECR을 준비하고, 앱 이미지는 수동 스크립트 또는 수동 Docker/ECR 명령으로 올립니다.
+Terraform apply 시점에 앱 이미지를 바로 실행하지 않을 경우 `container_image_uri`는 비워두거나 생략해도 됩니다.
 
 인프라 생성 전 AWS 계정을 확인하세요.
 
@@ -91,7 +105,7 @@ terraform apply
 
 적용이 끝나면 출력값으로 ECR 리포지토리 URL과 EC2 공인 IP를 확인할 수 있습니다.
 
-## 3. 수동 앱 배포
+## 4. 수동 앱 배포
 
 Terraform apply 후 아래 스크립트로 Docker 이미지를 빌드하고 ECR에 push한 뒤 EC2에서 실행합니다.
 
@@ -101,17 +115,21 @@ Terraform apply 후 아래 스크립트로 Docker 이미지를 빌드하고 ECR�
 
 배포 후 아래 주소로 health check를 확인합니다.
 
-```bash
-curl http://<ec2-public-ip>/health
+```powershell
+curl.exe http://<ec2-public-ip>/health
 ```
 
-## 4. 현재 범위
+현재 배포된 서버 기준 public IP는 `3.34.100.247`입니다.
+`focustation-key.pem` 같은 EC2 private key가 로컬에 없다면 `scripts/deploy.ps1 -SshKeyPath` 방식 대신 EC2 Instance Connect 또는 별도 SSH 접속 경로가 필요합니다.
+
+## 5. 현재 범위
 
 - CI/CD는 아직 포함하지 않았습니다.
 - HTTPS는 아직 포함하지 않았습니다.
 - 현재 Terraform은 `EC2 + Nginx + Docker 컨테이너` 구조를 기준으로 합니다.
 - API key는 Terraform 변수로 전달되며, 이후에는 SSM 또는 Secrets Manager로 옮기는 것이 좋습니다.
+- 현재 서비스 호출 구조는 `Mobile -> Firebase -> ML server -> Firebase -> Mobile`을 기준으로 합니다.
 
-## 5. Linear Regression 추론
+## 6. Linear Regression 추론
 
 Linear Regression 모델 export와 추론 실행 방법은 [LINEAR_REGRESSION_INFERENCE.md](./model/LINEAR_REGRESSION_INFERENCE.md)를 참고하세요.
