@@ -1,8 +1,8 @@
 """
 Train FocuStation sensor-aware satisfaction models.
 
-Run from the folder containing focustation_synthetic_3000_sensor_target_v2.csv:
-    python3 train_sensor_target_v2.py
+Run:
+    python3 model/sensor_target_v2/train_sensor_target_v2.py
 
 Main target:
     satisfaction_score_sensor_v2
@@ -27,8 +27,9 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
-DATA_PATH = Path("focustation_synthetic_3000_sensor_target_v2.csv")
-OUTPUT_DIR = Path("outputs_sensor_target_v2")
+BASE_DIR = Path(__file__).resolve().parent
+DATA_PATH = BASE_DIR / "focustation_synthetic_3000_sensor_target_v2.csv"
+OUTPUT_DIR = BASE_DIR / "outputs_sensor_target_v2"
 MODELS_DIR = OUTPUT_DIR / "models"
 METRICS_DIR = OUTPUT_DIR / "metrics"
 TARGET_COL = "satisfaction_score_sensor_v2"

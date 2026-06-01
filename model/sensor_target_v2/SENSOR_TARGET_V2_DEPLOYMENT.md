@@ -5,16 +5,16 @@
 Required:
 
 ```text
-inference_sensor_target_v2.py
-outputs_sensor_target_v2/models/ridge_sensor_target_v2.joblib
+model/sensor_target_v2/inference_sensor_target_v2.py
+model/sensor_target_v2/outputs_sensor_target_v2/models/ridge_sensor_target_v2.joblib
 ```
 
 Recommended for record keeping / retraining:
 
 ```text
-train_sensor_target_v2.py
-focustation_synthetic_3000_sensor_target_v2.csv
-outputs_sensor_target_v2/metrics/sensor_target_v2_metrics.json
+model/sensor_target_v2/train_sensor_target_v2.py
+model/sensor_target_v2/focustation_synthetic_3000_sensor_target_v2.csv
+model/sensor_target_v2/outputs_sensor_target_v2/metrics/sensor_target_v2_metrics.json
 ```
 
 Optional:
@@ -59,6 +59,11 @@ valid_sample_ratio
 phone_movement_ratio
 ```
 
+If Android sends `null`, `""`, or omits a model feature, the ML server fills it from the fitted model preprocessor:
+
+- numeric feature: training median
+- categorical feature: training mode
+
 The ML server can derive:
 
 ```text
@@ -99,7 +104,7 @@ time_match
 ## CLI test
 
 ```bash
-python3 inference_sensor_target_v2.py \
-  --input sample_input.json \
+python3 model/sensor_target_v2/inference_sensor_target_v2.py \
+  --input model/sensor_target_v2/sample_input_sensor_v2_recommended.json \
   --output predictions.json
 ```

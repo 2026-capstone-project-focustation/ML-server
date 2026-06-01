@@ -35,8 +35,10 @@ docker run --rm -e API_KEY=your-secret-api-key -p 8000:8000 focustation-ml-serve
 ## 2. `/score` API 호출
 
 `POST /score` 호출 시 `X-API-Key` 헤더가 필요합니다.
-요청 body는 실제 Linear Regression 모델의 feature column 전체를 포함해야 합니다.
-샘플 payload와 입력 컬럼 목록은 [LINEAR_REGRESSION_INFERENCE.md](./model/LINEAR_REGRESSION_INFERENCE.md)를 참고하세요.
+기본 실행 모델은 `sensor_target_v2`입니다.
+Android는 기존 non-derived base input과 sensor primitive summary를 보내면 됩니다.
+누락값, `null`, 빈 문자열(`""`)은 모델 학습 시 fitted preprocessor의 numeric median 또는 categorical mode로 보정됩니다.
+샘플 payload와 입력 컬럼 목록은 [SENSOR_TARGET_V2_DEPLOYMENT.md](./model/sensor_target_v2/SENSOR_TARGET_V2_DEPLOYMENT.md)를 참고하세요.
 
 로컬 서버 테스트:
 
@@ -49,7 +51,7 @@ uvicorn app.main:app --reload
 curl.exe -X POST "http://127.0.0.1:8000/score" `
   -H "Content-Type: application/json" `
   -H "X-API-Key: your-secret-api-key" `
-  --data-binary "@sample_input.json"
+  --data-binary "@model/sensor_target_v2/sample_input_sensor_v2_recommended.json"
 ```
 
 EC2 배포 서버 테스트:
@@ -62,14 +64,14 @@ curl.exe http://3.34.100.247/health
 curl.exe -X POST "http://3.34.100.247/score" `
   -H "Content-Type: application/json" `
   -H "X-API-Key: <api-key>" `
-  --data-binary "@sample_input.json"
+  --data-binary "@model/sensor_target_v2/sample_input_sensor_v2_recommended.json"
 ```
 
 예시 응답:
 
 ```json
 {
-  "score": 68.73164866961636
+  "score": 68.62780812318024
 }
 ```
 
@@ -130,6 +132,14 @@ curl.exe http://<ec2-public-ip>/health
 - API key는 Terraform 변수로 전달되며, 이후에는 SSM 또는 Secrets Manager로 옮기는 것이 좋습니다.
 - 현재 서비스 호출 구조는 `Mobile -> Firebase -> ML server -> Firebase -> Mobile`을 기준으로 합니다.
 
-## 6. Linear Regression 추론
+## 6. 모델 폴더 구조
 
-Linear Regression 모델 export와 추론 실행 방법은 [LINEAR_REGRESSION_INFERENCE.md](./model/LINEAR_REGRESSION_INFERENCE.md)를 참고하세요.
+모델별 학습 코드, 추론 코드, 데이터, 산출물은 [model](./model/README.md) 아래에 버전별로 정리되어 있습니다.
+
+- `model/linear_regression_v1/`: 기존 Linear Regression 만족도 모델
+- `model/sensor_target_v2/`: 기본 실행되는 sensor-aware target v2 모델
+
+## 7. 모델별 추론
+
+Sensor Target v2 모델 실행 방법은 [SENSOR_TARGET_V2_DEPLOYMENT.md](./model/sensor_target_v2/SENSOR_TARGET_V2_DEPLOYMENT.md)를 참고하세요.
+Linear Regression 모델 export와 추론 실행 방법은 [LINEAR_REGRESSION_INFERENCE.md](./model/linear_regression_v1/LINEAR_REGRESSION_INFERENCE.md)를 참고하세요.

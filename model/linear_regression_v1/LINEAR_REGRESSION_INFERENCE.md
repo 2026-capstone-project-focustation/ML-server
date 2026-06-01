@@ -2,9 +2,9 @@
 
 ## 파일 구성
 
-- `export_linear_regression_model.py`: `focustation_synthetic_3000.csv`로 Linear Regression 모델을 학습하고 배포용 `joblib` bundle을 저장합니다.
-- `inference_linear_regression.py`: 저장된 모델을 로드해서 예측만 수행합니다.
-- `outputs_linear_regression/models/linear_regression.joblib`: 서버에 올릴 모델 파일입니다. 아래 export 명령 실행 후 생성됩니다.
+- `model/linear_regression_v1/export_linear_regression_model.py`: `focustation_synthetic_3000.csv`로 Linear Regression 모델을 학습하고 배포용 `joblib` bundle을 저장합니다.
+- `model/linear_regression_v1/inference_linear_regression.py`: 저장된 모델을 로드해서 예측만 수행합니다.
+- `model/linear_regression_v1/outputs_linear_regression/models/linear_regression.joblib`: 서버에 올릴 모델 파일입니다. 아래 export 명령 실행 후 생성됩니다.
 
 ## 의존성 설치
 
@@ -14,24 +14,24 @@ pip install pandas numpy scikit-learn joblib
 
 ## 모델 파일 생성
 
-현재 폴더에서 한 번 실행합니다.
+repo root에서 한 번 실행합니다.
 
 ```bash
-python3 export_linear_regression_model.py
+python3 model/linear_regression_v1/export_linear_regression_model.py
 ```
 
 생성되는 주요 파일:
 
 ```text
-outputs_linear_regression/models/linear_regression.joblib
-outputs_linear_regression/metrics/linear_regression_metrics.json
+model/linear_regression_v1/outputs_linear_regression/models/linear_regression.joblib
+model/linear_regression_v1/outputs_linear_regression/metrics/linear_regression_metrics.json
 ```
 
 서버에는 최소한 아래 파일을 같이 올리면 됩니다.
 
 ```text
-inference_linear_regression.py
-outputs_linear_regression/models/linear_regression.joblib
+model/linear_regression_v1/inference_linear_regression.py
+model/linear_regression_v1/outputs_linear_regression/models/linear_regression.joblib
 ```
 
 ## CSV로 추론 실행
@@ -39,7 +39,7 @@ outputs_linear_regression/models/linear_regression.joblib
 입력 CSV에는 학습 때 사용한 feature column이 모두 있어야 합니다. `satisfaction_score`, `split`, `interaction_id` 같은 컬럼은 없어도 됩니다.
 
 ```bash
-python3 inference_linear_regression.py \
+python3 model/linear_regression_v1/inference_linear_regression.py \
   --input sample_input.csv \
   --output predictions.csv
 ```
@@ -51,8 +51,8 @@ python3 inference_linear_regression.py \
 단일 record 또는 record 배열을 입력할 수 있습니다.
 
 ```bash
-python3 inference_linear_regression.py \
-  --input sample_input.json \
+python3 model/linear_regression_v1/inference_linear_regression.py \
+  --input model/linear_regression_v1/sample_input.json \
   --output predictions.json
 ```
 

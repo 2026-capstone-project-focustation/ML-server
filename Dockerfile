@@ -10,7 +10,8 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
-COPY model/outputs_linear_regression/models ./model/outputs_linear_regression/models
+COPY model/sensor_target_v2/inference_sensor_target_v2.py ./model/sensor_target_v2/inference_sensor_target_v2.py
+COPY model/sensor_target_v2/outputs_sensor_target_v2/models ./model/sensor_target_v2/outputs_sensor_target_v2/models
 
 RUN useradd --create-home --shell /usr/sbin/nologin appuser \
     && chown -R appuser:appuser /app

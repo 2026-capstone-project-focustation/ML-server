@@ -2,8 +2,9 @@
 Run Linear Regression inference for FocuStation satisfaction prediction.
 
 Examples:
-    python3 inference_linear_regression.py --input sample.csv --output predictions.csv
-    python3 inference_linear_regression.py --input sample.json --output predictions.json
+    python3 model/linear_regression_v1/inference_linear_regression.py \
+        --input model/linear_regression_v1/sample_input.json \
+        --output predictions.json
 """
 
 from __future__ import annotations
@@ -17,7 +18,8 @@ import joblib
 import pandas as pd
 
 
-DEFAULT_MODEL_PATH = Path("outputs_linear_regression/models/linear_regression.joblib")
+BASE_DIR = Path(__file__).resolve().parent
+DEFAULT_MODEL_PATH = BASE_DIR / "outputs_linear_regression/models/linear_regression.joblib"
 PREDICTION_COL = "predicted_satisfaction_score"
 
 
