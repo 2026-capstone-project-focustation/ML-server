@@ -2,7 +2,7 @@
 Export a Linear Regression inference bundle for FocuStation satisfaction prediction.
 
 Run:
-    python3 export_linear_regression_model.py
+    python3 model/linear_regression_v1/export_linear_regression_model.py
 """
 
 from __future__ import annotations
@@ -22,8 +22,9 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
 
-DATA_PATH = Path("focustation_synthetic_3000.csv")
-OUTPUT_DIR = Path("outputs_linear_regression")
+BASE_DIR = Path(__file__).resolve().parent
+DATA_PATH = BASE_DIR / "focustation_synthetic_3000.csv"
+OUTPUT_DIR = BASE_DIR / "outputs_linear_regression"
 MODELS_DIR = OUTPUT_DIR / "models"
 METRICS_DIR = OUTPUT_DIR / "metrics"
 MODEL_PATH = MODELS_DIR / "linear_regression.joblib"
